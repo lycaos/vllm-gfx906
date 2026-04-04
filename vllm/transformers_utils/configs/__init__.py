@@ -40,6 +40,7 @@ _CLASS_TO_MODULE: dict[str, str] = {
     "JAISConfig": "vllm.transformers_utils.configs.jais",
     "Lfm2MoeConfig": "vllm.transformers_utils.configs.lfm2_moe",
     "MedusaConfig": "vllm.transformers_utils.configs.medusa",
+    "MiniMaxM2Config": "vllm.transformers_utils.configs.minimax_m2",
     "MiDashengLMConfig": "vllm.transformers_utils.configs.midashenglm",
     "MLPSpeculatorConfig": "vllm.transformers_utils.configs.mlp_speculator",
     "MoonViTConfig": "vllm.transformers_utils.configs.moonvit",

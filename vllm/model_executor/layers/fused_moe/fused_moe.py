@@ -1216,8 +1216,14 @@ def get_moe_wna16_block_config(
             # at the same time.
             block_size_n = 1024
 
-        # Ensure BLOCK_SIZE_K is a divisor of size_k for CUDA kernel compatibility
-        block_size_k = _ensure_block_size_k_divisible(size_k, block_size_k, group_size)
+        # NOTE(gfx906): Use iterative halving fallback for BLOCK_SIZE_K
+        # compatibility with MoE WNA16 CUDA kernel (matches v0.11.3 behavior)
+        while block_size_k > group_size and size_k % block_size_k != 0:
+            block_size_k //= 2
+        if size_k % block_size_k != 0:
+            block_size_k = 1 << (size_k.bit_length() - 1)
+            while block_size_k > group_size and size_k % block_size_k != 0:
+                block_size_k //= 2
 
         return {"BLOCK_SIZE_N": block_size_n, "BLOCK_SIZE_K": block_size_k}
 
