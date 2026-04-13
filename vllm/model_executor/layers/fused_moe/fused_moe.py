@@ -878,6 +878,24 @@ def dispatch_fused_moe_kernel(
             bit=4 if use_int4_w4a16 else 8,
         )
 
+        # NOTE(gfx906): The CUDA MoE WNA16 kernel requires both
+        # size_k % BLOCK_SIZE_K == 0 AND BLOCK_SIZE_K % group_size == 0.
+        # Fall back to Triton when these constraints cannot be met:
+        # 1. size_k not divisible by group_size (no valid BLOCK_SIZE_K)
+        # 2. Pre-tuned BLOCK_SIZE_K from JSON config not divisible by
+        #    group_size (config was tuned for a different group_size)
+        if use_moe_wna16_cuda and (
+            A.size(1) % block_shape[1] != 0
+            or (
+                "BLOCK_SIZE_K" in config
+                and config["BLOCK_SIZE_K"] % block_shape[1] != 0
+            )
+        ):
+            use_moe_wna16_cuda = False
+            if "GROUP_SIZE_M" not in config:
+                config = config.copy()
+                config["GROUP_SIZE_M"] = 1
+
         if use_moe_wna16_cuda:
             invoke_fused_moe_wna16_cuda_kernel(
                 A,
