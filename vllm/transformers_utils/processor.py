@@ -187,6 +187,7 @@ def get_processor(
                 *args,
                 revision=revision,
                 trust_remote_code=trust_remote_code,
+                fix_mistral_regex=True,
                 **kwargs,
             )
         elif issubclass(processor_cls, ProcessorMixin):
