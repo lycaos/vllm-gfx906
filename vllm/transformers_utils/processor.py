@@ -139,6 +139,34 @@ def _merge_mm_kwargs(
     return allowed_kwargs
 
 
+def _maybe_register_vllm_config(model_path: str) -> None:
+    """Register vLLM custom config with transformers AutoConfig if needed.
+
+    This allows AutoProcessor.from_pretrained() to resolve model configs
+    that are in vLLM's registry without requiring trust_remote_code.
+    """
+    try:
+        import json
+        from pathlib import Path
+
+        from transformers import AutoConfig
+
+        config_file = Path(model_path) / "config.json"
+        if not config_file.exists():
+            return
+        with open(config_file) as f:
+            model_type = json.load(f).get("model_type")
+        if not model_type:
+            return
+        from vllm.transformers_utils.config import _CONFIG_REGISTRY
+        if model_type in _CONFIG_REGISTRY:
+            AutoConfig.register(
+                model_type, _CONFIG_REGISTRY[model_type], exist_ok=True
+            )
+    except Exception:
+        pass
+
+
 def get_processor(
     processor_name: str,
     *args: Any,
@@ -152,6 +180,7 @@ def get_processor(
         revision = "main"
     try:
         processor_name = convert_model_repo_to_path(processor_name)
+        _maybe_register_vllm_config(processor_name)
         if isinstance(processor_cls, tuple) or processor_cls == ProcessorMixin:
             processor = AutoProcessor.from_pretrained(
                 processor_name,

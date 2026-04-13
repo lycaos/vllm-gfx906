@@ -94,6 +94,7 @@ __all__ = [
     "JAISConfig",
     "Lfm2MoeConfig",
     "MedusaConfig",
+    "MiniMaxM2Config",
     "MiDashengLMConfig",
     "MLPSpeculatorConfig",
     "MoonViTConfig",
