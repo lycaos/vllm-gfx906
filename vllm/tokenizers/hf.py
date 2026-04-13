@@ -88,6 +88,7 @@ class CachedHfTokenizer(TokenizerLike):
                 trust_remote_code=trust_remote_code,
                 revision=revision,
                 cache_dir=download_dir,
+                fix_mistral_regex=True,
                 **kwargs,
             )
         except ValueError as e:
