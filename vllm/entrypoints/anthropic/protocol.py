@@ -34,7 +34,7 @@ class AnthropicUsage(BaseModel):
 class AnthropicContentBlock(BaseModel):
     """Content block in message"""
 
-    type: Literal["text", "image", "tool_use", "tool_result", "thinking"]
+    type: Literal["text", "image", "tool_use", "tool_result", "thinking", "redacted_thinking"]
     text: str | None = None
     # For image content
     source: dict[str, Any] | None = None

@@ -121,6 +121,16 @@ class AnthropicServingMessages(OpenAIServingChat):
         cls._convert_messages(anthropic_request.messages, openai_messages)
         req = cls._build_base_request(anthropic_request, openai_messages)
         cls._handle_streaming_options(req, anthropic_request)
+
+        # Pydantic v2 converts tool_calls to a ValidatorIterator (lazy,
+        # single-use). Materialize them into plain lists so downstream
+        # code (chat templates, _postprocess_messages) can iterate them
+        # multiple times without losing data.
+        for msg in req.messages:
+            if isinstance(msg, dict) and "tool_calls" in msg:
+                tc = msg["tool_calls"]
+                if tc is not None and not isinstance(tc, list):
+                    msg["tool_calls"] = list(tc)
         cls._convert_tool_choice(anthropic_request, req)
         cls._convert_tools(anthropic_request, req)
         return req
@@ -159,7 +169,11 @@ class AnthropicServingMessages(OpenAIServingChat):
             else:
                 cls._convert_message_content(msg, openai_msg, openai_messages)
 
-            openai_messages.append(openai_msg)
+            # Skip user messages with no content — this happens when the
+            # user message only contained tool_result blocks that were
+            # already converted to separate role:"tool" messages.
+            if not (msg.role == "user" and "content" not in openai_msg):
+                openai_messages.append(openai_msg)
 
     @classmethod
     def _convert_message_content(
@@ -215,6 +229,12 @@ class AnthropicServingMessages(OpenAIServingChat):
             content_parts.append({"type": "image_url", "image_url": {"url": image_url}})
         elif block.type == "thinking" and block.thinking is not None:
             reasoning_parts.append(block.thinking)
+        elif block.type == "redacted_thinking":
+            # Redacted thinking blocks contain safety-filtered reasoning.
+            # We skip them as the content is opaque (base64 'data' field),
+            # but accepting the block prevents a validation error when the
+            # client echoes back the full assistant message.
+            pass
         elif block.type == "tool_use":
             cls._convert_tool_use_block(block, tool_calls)
         elif block.type == "tool_result":
