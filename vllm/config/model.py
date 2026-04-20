@@ -282,6 +282,12 @@ class ModelConfig:
     logits_processors: list[str | type[LogitsProcessor]] | None = None
     """One or more logits processors' fully-qualified class names or class
     definitions"""
+    default_logit_bias_file: str | None = None
+    """Path to a JSON file containing default logit biases applied to every
+    request. Format: {"token_id": bias, ...}. Biases are clamped to [-100,
+    100]. Per-request logit_bias overrides these defaults on conflict."""
+    default_logit_bias: dict[int, float] | None = field(init=False,
+                                                        default=None)
     io_processor_plugin: str | None = None
     """IOProcessor plugin name to load at model startup"""
 
@@ -429,6 +435,36 @@ class ModelConfig:
         skip_mm_profiling: bool | None,
         video_pruning_rate: float | None,
     ) -> None:
+        # Load default logit biases from file if specified.
+        # Empty string or "none"/"off"/"disabled" (case-insensitive) means
+        # disabled — useful to toggle via env vars in docker-compose without
+        # having to remove the flag entirely.
+        _bias_file = self.default_logit_bias_file
+        if _bias_file is not None and _bias_file.strip() and \
+                _bias_file.strip().lower() not in ("none", "off", "disabled", "false", "0"):
+            import json as _json
+            from pathlib import Path
+            bias_path = Path(_bias_file.strip())
+            if not bias_path.exists():
+                raise ValueError(
+                    f"Default logit bias file not found: {bias_path}")
+            with open(bias_path) as f:
+                raw = _json.load(f)
+            # Server-side defaults bypass the [-100, 100] API clamp:
+            # they are applied after SamplingParams.from_optional() in the
+            # chat completion protocol, allowing effective hard-ban values
+            # like -1000.0 for non-Latin tokens.
+            self.default_logit_bias = {
+                int(k): float(v) for k, v in raw.items()
+            }
+            logger.info(
+                "Loaded %d default logit biases from %s",
+                len(self.default_logit_bias), bias_path)
+        elif _bias_file is not None:
+            logger.info(
+                "Default logit bias disabled "
+                "(--default-logit-bias-file=%r)", _bias_file)
+
         # Keep set served_model_name before maybe_model_redirect(self.model)
         self.served_model_name = get_served_model_name(
             self.model, self.served_model_name
@@ -1360,6 +1396,9 @@ class ModelConfig:
                 str(diff_sampling_param),
                 scope="local",
             )
+
+        if self.default_logit_bias is not None:
+            diff_sampling_param["logit_bias"] = self.default_logit_bias
 
         return diff_sampling_param
 

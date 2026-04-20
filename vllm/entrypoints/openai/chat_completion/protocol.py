@@ -481,7 +481,11 @@ class ChatCompletionRequest(OpenAIBaseModel):
         if self.kv_transfer_params:
             # Pass in kv_transfer_params via extra_args
             extra_args["kv_transfer_params"] = self.kv_transfer_params
-        return SamplingParams.from_optional(
+
+        # Step 1: build SamplingParams with per-request logit_bias only.
+        # The per-request bias is clamped to [-100, 100] per OpenAI API spec
+        # by SamplingParams.from_optional().
+        sp = SamplingParams.from_optional(
             n=self.n,
             presence_penalty=self.presence_penalty,
             frequency_penalty=self.frequency_penalty,
@@ -512,6 +516,22 @@ class ChatCompletionRequest(OpenAIBaseModel):
             skip_clone=True,  # Created fresh per request, safe to skip clone
             repetition_detection=self.repetition_detection,
         )
+
+        # Step 2: merge server-side default logit_bias AFTER from_optional.
+        # This bypasses the [-100, 100] API clamp so admins can use stronger
+        # values like -1000 for effective hard-ban of specific token sets
+        # (e.g., non-Latin tokens to prevent multilingual contamination).
+        # Per-request bias still wins on conflict.
+        _default_lb = default_sampling_params.get("logit_bias")
+        if _default_lb is not None:
+            if sp.logit_bias is None:
+                sp.logit_bias = dict(_default_lb)
+            else:
+                merged = dict(_default_lb)
+                merged.update(sp.logit_bias)  # per-request overrides default
+                sp.logit_bias = merged
+
+        return sp
 
     @model_validator(mode="before")
     @classmethod

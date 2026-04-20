@@ -593,6 +593,8 @@ class EngineArgs:
     )
     """Custom logitproc types"""
 
+    default_logit_bias_file: str | None = ModelConfig.default_logit_bias_file
+
     async_scheduling: bool | None = SchedulerConfig.async_scheduling
 
     stream_interval: int = SchedulerConfig.stream_interval
@@ -742,6 +744,10 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--logits-processors", **model_kwargs["logits_processors"]
+        )
+        model_group.add_argument(
+            "--default-logit-bias-file",
+            **model_kwargs["default_logit_bias_file"],
         )
         model_group.add_argument(
             "--io-processor-plugin", **model_kwargs["io_processor_plugin"]
@@ -1377,6 +1383,7 @@ class EngineArgs:
             model_impl=self.model_impl,
             override_attention_dtype=self.override_attention_dtype,
             logits_processors=self.logits_processors,
+            default_logit_bias_file=self.default_logit_bias_file,
             video_pruning_rate=self.video_pruning_rate,
             io_processor_plugin=self.io_processor_plugin,
         )
